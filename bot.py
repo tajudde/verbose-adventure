@@ -1,5 +1,6 @@
 import time
 import os
+import shutil
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -8,89 +9,72 @@ from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
-
-
-
-
-
-
-
-import os
-import sys
-import subprocess
-import time
-
-def kill_chrome_processes():
-    """Terminate all Chrome processes to ensure clean state"""
-    try:
-        # For Linux/Unix systems (including GitHub Actions)
-        if sys.platform in ['linux', 'linux2']:
-            # Try graceful termination first
-            result = subprocess.run(['pkill', '-f', 'chrome'], 
-                                  capture_output=True, text=True)
-            
-            # If no processes were found, pkill returns non-zero exit code
-            if result.returncode != 0:
-                print("No Chrome processes found or unable to terminate")
-            else:
-                print("Chrome processes terminated successfully")
-                
-            # Force kill if any remain after a brief wait
-            time.sleep(1)
-            subprocess.run(['pkill', '-9', '-f', 'chrome'], 
-                         capture_output=True)
-            
-        # For Windows systems
-        elif sys.platform == 'win32':
-            subprocess.run(['taskkill', '/f', '/im', 'chrome.exe'], 
-                         capture_output=True)
-            
-        # For macOS
-        elif sys.platform == 'darwin':
-            subprocess.run(['pkill', '-f', 'Google Chrome'], 
-                         capture_output=True)
-            subprocess.run(['pkill', '-9', '-f', 'Google Chrome'], 
-                         capture_output=True)
-
-
-
-
-
-
-
 def main():
     print("🚀 Starting Selenium test with your profile...")
+    
+    # === FIX: Clean up any existing Chrome processes and lock files ===
+    print("🧹 Cleaning up any existing Chrome processes...")
+    os.system('pkill -f chrome || true')  # Kill any Chrome processes
+    os.system('pkill -f chromedriver || true')  # Kill any ChromeDriver processes
+    
+    # Define the profile path
+    profile_path = '/home/runner/.config/google-chrome'
+    
+    # Remove Chrome lock files if they exist
+    lock_files = [
+        os.path.join(profile_path, 'Default', 'SingletonLock'),
+        os.path.join(profile_path, 'SingletonLock'),
+        os.path.join(profile_path, 'SingletonCookie'),
+        os.path.join(profile_path, 'Default', 'SingletonCookie')
+    ]
+    
+    for lock_file in lock_files:
+        if os.path.exists(lock_file):
+            try:
+                os.remove(lock_file)
+                print(f"✅ Removed lock file: {lock_file}")
+            except Exception as e:
+                print(f"⚠️  Could not remove {lock_file}: {e}")
     
     # Configure Chrome options for GitHub Actions
     chrome_options = Options()
     
     # === CRITICAL: Use the injected profile path ===
-    chrome_options.add_argument('--user-data-dir=/home/runner/.config/google-chrome')
+    chrome_options.add_argument(f'--user-data-dir={profile_path}')
     chrome_options.add_argument('--profile-directory=Default')
     
-    # === FIX FOR DEVMODES ACTIVEPORT ERROR ===
+    # === FIX: Add unique user data directory per run ===
+    import uuid
+    unique_id = uuid.uuid4().hex[:8]
+    unique_profile_dir = f'{profile_path}_{unique_id}'
+    
+    # Copy profile to unique directory to avoid conflicts
+    if os.path.exists(profile_path):
+        try:
+            shutil.copytree(profile_path, unique_profile_dir)
+            print(f"✅ Copied profile to unique directory: {unique_profile_dir}")
+            chrome_options.add_argument(f'--user-data-dir={unique_profile_dir}')
+        except Exception as e:
+            print(f"⚠️  Could not copy profile, using original: {e}")
+            chrome_options.add_argument(f'--user-data-dir={profile_path}')
+    
+    # Chrome configuration
     chrome_options.add_argument('--headless=new')
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--disable-dev-shm-usage')
     chrome_options.add_argument('--disable-gpu')
     chrome_options.add_argument('--window-size=1920,1080')
     chrome_options.add_argument('--disable-extensions')
-    chrome_options.add_argument('--disable-dev-tools')
-    chrome_options.add_argument('--remote-debugging-port=9222')  # Explicit port
-    chrome_options.add_argument('--remote-debugging-address=0.0.0.0')
+    chrome_options.add_argument('--remote-debugging-port=0')
     chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
     
     # Additional stability arguments
-    chrome_options.add_argument('--no-zygote')
-    chrome_options.add_argument('--single-process')
     chrome_options.add_argument('--no-first-run')
     chrome_options.add_argument('--disable-setuid-sandbox')
     chrome_options.add_argument('--disable-web-security')
-    chrome_options.add_argument('--allow-running-insecure-content')
     chrome_options.add_argument('--disable-notifications')
-    chrome_options.add_argument('--disable-popup-blocking')
 
-    # Initialize the driver with Service
+    # Initialize the driver
     try:
         print("🛠️  Setting up ChromeDriver...")
         service = Service(ChromeDriverManager().install())
@@ -99,9 +83,8 @@ def main():
         
     except WebDriverException as e:
         print(f"❌ Failed to initialize Chrome driver: {e}")
-        print("🔄 Trying alternative method...")
+        print("🔄 Trying alternative method without service...")
         try:
-            # Fallback: try without Service
             driver = webdriver.Chrome(options=chrome_options)
             print("✅ Chrome driver initialized with fallback method!")
         except Exception as fallback_error:
@@ -117,15 +100,13 @@ def main():
             "//div[contains(@class, 'executing')]",
             "//*[contains(text(), 'Executing')]",
             "//*[contains(text(), 'Running')]",
-            "//circle[@id='filledCircle']",
-            "//*[contains(@class, 'notebook-executing')]"
         ]
         
         for indicator in running_indicators:
             try:
                 elements = driver.find_elements(By.XPATH, indicator)
                 if elements:
-                    print(f"   ⚡ Found {len(elements)} running cell indicators with: {indicator}")
+                    print(f"   ⚡ Found {len(elements)} running cell indicators")
                     return True
             except:
                 continue
@@ -136,28 +117,14 @@ def main():
         print("   ⌨️  Sending Ctrl+Enter to run focused cell...")
         
         try:
-            # Get the currently focused element
-            focused_element = driver.switch_to.active_element
-            print(f"   🔍 Focused element: {focused_element.tag_name}")
-            
-            # Send Ctrl+Enter to the focused element
-            focused_element.send_keys(Keys.CONTROL + Keys.ENTER)
+            body = driver.find_element(By.TAG_NAME, 'body')
+            body.send_keys(Keys.CONTROL + Keys.ENTER)
             print("   ✅ Ctrl+Enter sent successfully!")
             return True
             
         except Exception as e:
             print(f"   ❌ Failed to send Ctrl+Enter: {str(e)}")
-            
-            # Fallback: try sending to body as last resort
-            try:
-                print("   🔧 Trying fallback: sending Ctrl+Enter to body...")
-                body = driver.find_element(By.TAG_NAME, 'body')
-                body.send_keys(Keys.CONTROL + Keys.ENTER)
-                print("   ✅ Fallback Ctrl+Enter sent!")
-                return True
-            except Exception as fallback_error:
-                print(f"   ❌ Fallback also failed: {str(fallback_error)}")
-                return False
+            return False
 
     def focus_first_cell():
         """Try to focus on the first code cell"""
@@ -168,20 +135,17 @@ def main():
             "//div[contains(@class, 'cell')]",
             "//div[contains(@class, 'input')]",
             "//div[@role='textbox']",
-            "//div[contains(@class, 'monaco-editor')]"
         ]
         
         for selector in cell_selectors:
             try:
                 cells = driver.find_elements(By.XPATH, selector)
                 if cells:
-                    print(f"   ✅ Found {len(cells)} potential code cells with: {selector}")
-                    # Click on the first cell to focus it
+                    print(f"   ✅ Found {len(cells)} potential code cells")
                     cells[0].click()
                     print("   🎯 First code cell focused!")
                     return True
             except Exception as e:
-                print(f"   ❌ Could not focus with {selector}: {str(e)}")
                 continue
         
         print("   ⚠️  Could not find a code cell to focus")
@@ -195,7 +159,7 @@ def main():
         
         # Wait for page to load
         print("⏳ Waiting for page to load...")
-        time.sleep(15)
+        time.sleep(10)
 
         # Check if we're on the right page
         print(f"📄 Current URL: {driver.current_url}")
@@ -209,12 +173,7 @@ def main():
         
         if cell_running:
             print("   ⏳ Cells are running - waiting for completion...")
-            time.sleep(20)
-            
-            if check_running_cells():
-                print("   ⚠️  Cells still running after wait, proceeding anyway...")
-            else:
-                print("   ✅ All cells completed execution")
+            time.sleep(15)
         else:
             print("   ✅ No running cells detected - attempting to run first cell")
             
@@ -225,33 +184,15 @@ def main():
             
             if cell_started:
                 print("   ⏳ Waiting for cell to start running...")
-                time.sleep(5)
-                
-                if check_running_cells():
-                    print("   ✅ Cell started running successfully!")
-                    time.sleep(25)
-                else:
-                    print("   ⚠️  Cell may not have started running")
-
-        # Scroll and take screenshot
-        print("🖱️  Scrolling to capture notebook content...")
-        driver.execute_script("window.scrollBy(0, 800);")
-        time.sleep(2)
+                time.sleep(10)
 
         # Take screenshot
         screenshot_filename = 'colab_screenshot.png'
         driver.save_screenshot(screenshot_filename)
         print(f"   📸 Screenshot saved: {screenshot_filename}")
 
-        # Display results
-        print("\n" + "="*60)
-        print("🎯 SCREENSHOT COMPLETE")
-        print("="*60)
+        print("\n🎯 SCREENSHOT COMPLETE")
         print(f"📋 URL visited: {colab_url}")
-        print(f"🔍 Running cells detected initially: {'Yes' if cell_running else 'No'}")
-        print(f"🎬 Attempted to run cell: {'Yes' if not cell_running else 'No'}")
-        print(f"🚀 Cell started successfully: {'Yes' if not cell_running and cell_started else 'No'}")
-        print("="*60)
 
     except Exception as e:
         print(f"❌ Error: {str(e)}")
@@ -259,12 +200,20 @@ def main():
         traceback.print_exc()
 
     finally:
-        # Always quit the driver in GitHub Actions
+        # Always quit the driver
         try:
             driver.quit()
             print("\n✅ Browser closed. Test completed.")
         except:
             print("\n⚠️  Browser already closed or failed to quit.")
+        
+        # Clean up temporary profile directory
+        if 'unique_profile_dir' in locals() and os.path.exists(unique_profile_dir):
+            try:
+                shutil.rmtree(unique_profile_dir)
+                print(f"✅ Cleaned up temporary profile: {unique_profile_dir}")
+            except:
+                print("⚠️  Could not clean up temporary profile")
 
 if __name__ == "__main__":
     main()

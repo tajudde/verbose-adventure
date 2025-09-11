@@ -5,6 +5,8 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import WebDriverException
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
 def main():
     print("🚀 Starting Selenium test with your profile...")
@@ -16,26 +18,45 @@ def main():
     chrome_options.add_argument('--user-data-dir=/home/runner/.config/google-chrome')
     chrome_options.add_argument('--profile-directory=Default')
     
-    # Required for GitHub Actions/Linux environment
-    chrome_options.add_argument('--headless=new')  # Use new headless mode
+    # === FIX FOR DEVMODES ACTIVEPORT ERROR ===
+    chrome_options.add_argument('--headless=new')
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--disable-dev-shm-usage')
     chrome_options.add_argument('--disable-gpu')
-    chrome_options.add_argument('--window-size=1920x1080')
-    chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-    
-    # Disable extensions and other settings for stability
+    chrome_options.add_argument('--window-size=1920,1080')
     chrome_options.add_argument('--disable-extensions')
     chrome_options.add_argument('--disable-dev-tools')
-    chrome_options.add_argument('--remote-debugging-port=0')
+    chrome_options.add_argument('--remote-debugging-port=9222')  # Explicit port
+    chrome_options.add_argument('--remote-debugging-address=0.0.0.0')
+    chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+    
+    # Additional stability arguments
+    chrome_options.add_argument('--no-zygote')
+    chrome_options.add_argument('--single-process')
+    chrome_options.add_argument('--no-first-run')
+    chrome_options.add_argument('--disable-setuid-sandbox')
+    chrome_options.add_argument('--disable-web-security')
+    chrome_options.add_argument('--allow-running-insecure-content')
+    chrome_options.add_argument('--disable-notifications')
+    chrome_options.add_argument('--disable-popup-blocking')
 
-    # Initialize the driver
+    # Initialize the driver with Service
     try:
-        driver = webdriver.Chrome(options=chrome_options)
+        print("🛠️  Setting up ChromeDriver...")
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
         print("✅ Chrome driver initialized successfully!")
+        
     except WebDriverException as e:
         print(f"❌ Failed to initialize Chrome driver: {e}")
-        return
+        print("🔄 Trying alternative method...")
+        try:
+            # Fallback: try without Service
+            driver = webdriver.Chrome(options=chrome_options)
+            print("✅ Chrome driver initialized with fallback method!")
+        except Exception as fallback_error:
+            print(f"❌ Fallback also failed: {fallback_error}")
+            return
 
     def check_running_cells():
         """Check if there are any running Colab cells"""
@@ -126,6 +147,10 @@ def main():
         print("⏳ Waiting for page to load...")
         time.sleep(15)
 
+        # Check if we're on the right page
+        print(f"📄 Current URL: {driver.current_url}")
+        print(f"📄 Page title: {driver.title}")
+
         # Check if there are any running Colab cells
         print("🔍 Checking for running Colab cells...")
         
@@ -185,8 +210,11 @@ def main():
 
     finally:
         # Always quit the driver in GitHub Actions
-        driver.quit()
-        print("\n✅ Browser closed. Test completed.")
+        try:
+            driver.quit()
+            print("\n✅ Browser closed. Test completed.")
+        except:
+            print("\n⚠️  Browser already closed or failed to quit.")
 
 if __name__ == "__main__":
     main()

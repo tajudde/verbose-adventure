@@ -15,8 +15,8 @@ from selenium.webdriver.common.action_chains import ActionChains
 
 # Configure Chrome options for Colab
 options = webdriver.ChromeOptions()
-chrome_options.add_argument("--user-data-dir=/home/runner/.config/google-chrome")
-chrome_options.add_argument("--profile-directory=Default")
+options.add_argument('--user-data-dir=/home/runner/.config/google-chrome")
+options.add_argument('--profile-directory=Default')
 options.add_argument('--headless')
 options.add_argument('--no-sandbox')
 options.add_argument('--disable-dev-shm-usage')

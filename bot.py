@@ -2,44 +2,64 @@ import requests
 import time
 import json
 import random
+import os
 from datetime import datetime, timedelta
+import warnings
+from urllib3.exceptions import InsecureRequestWarning
+
+# Suppress SSL warnings
+warnings.filterwarnings("ignore", category=InsecureRequestWarning)
 
 class EcoXBot:
     def __init__(self, bearer_token):
         self.base_url = "https://api.ecox.network/api/v1"
+        
+        # Rotating user agents
+        self.user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/122.0"
+        ]
+        
         self.headers = {
             "authorization": f"Bearer {bearer_token}",
             "accept": "application/json, text/plain, */*",
             "accept-encoding": "gzip, deflate, br, zstd",
-            "accept-language": "en",
+            "accept-language": "en-US,en;q=0.9",
             "origin": "https://app.ecox.network",
             "priority": "u=1, i",
             "referer": "https://app.ecox.network/",
-            "sec-ch-ua": '"Opera";v="122", "Chromium";v="137", "Not/A)Brand";v="24"',
+            "sec-ch-ua": '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": '"Windows"',
             "sec-fetch-dest": "empty",
             "sec-fetch-mode": "cors",
             "sec-fetch-site": "same-site",
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36 OPR/122.0.0.0 (Edition developer)",
             "content-type": "application/json"
         }
-        # Updated comments with follow requests
+        
+        # Updated comments
         self.comments = [
-            "Great post! 👍 follow me i will follow",
-            "Awesome work! 🌱 i follow you follow me back",
-            "Keep up the good work! 💚 follow me i will follow",
-            "Amazing environmental effort! 🌍 i follow you follow me back",
-            "Love this initiative! ♻️ follow me i will follow",
-            "Fantastic contribution to sustainability! 🌿 i follow you follow me back",
-            "Well done! 👏 follow me i will follow",
-            "Inspiring content! ✨ i follow you follow me back",
-            "This is wonderful! 🌟 follow me i will follow",
-            "Excellent eco-action! 🍃 i follow you follow me back"
+            "Great post! 👍",
+            "Awesome work! 🌱",
+            "Keep up the good work! 💚",
+            "Amazing environmental effort! 🌍",
+            "Love this initiative! ♻️",
+            "Fantastic contribution to sustainability! 🌿",
+            "Well done! 👏",
+            "Inspiring content! ✨",
+            "This is wonderful! 🌟",
+            "Excellent eco-action! 🍃"
         ]
 
+    def generate_random_ip(self):
+        """Generate a random IP address for header spoofing"""
+        return f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}"
+
     def get_community_articles(self):
-        """Fetch community articles - follow me i will follow"""
+        """Fetch community articles"""
         url = f"{self.base_url}/community/list-article"
         cache_bust = int(time.time() * 1000)
         params = {
@@ -48,19 +68,49 @@ class EcoXBot:
             "_cacheBust": cache_bust
         }
 
+        # Rotate user agent and add IP headers
+        current_headers = self.headers.copy()
+        current_headers["user-agent"] = random.choice(self.user_agents)
+        current_headers["x-forwarded-for"] = self.generate_random_ip()
+        current_headers["x-real-ip"] = self.generate_random_ip()
+        current_headers["client-ip"] = self.generate_random_ip()
+
         try:
-            response = requests.get(url, params=params, headers=self.headers)
+            response = requests.get(
+                url, 
+                params=params, 
+                headers=current_headers, 
+                timeout=15,
+                verify=False  # Bypass SSL verification for GitHub Actions
+            )
+            
+            # Debug output
+            print(f"🔍 API Response Status: {response.status_code}")
+            print(f"🔍 Response Length: {len(response.text)} characters")
+            
             if response.status_code == 200:
-                return response.json()
+                try:
+                    return response.json()
+                except json.JSONDecodeError:
+                    print(f"❌ JSON decode error. Response: {response.text[:200]}...")
+                    return None
             else:
-                print(f"❌ Failed to fetch articles: {response.status_code}")
+                print(f"❌ API returned status {response.status_code}")
+                print(f"❌ Response: {response.text[:200]}...")
                 return None
+                
+        except requests.exceptions.Timeout:
+            print("❌ Request timeout")
+            return None
+        except requests.exceptions.ConnectionError:
+            print("❌ Connection error")
+            return None
         except Exception as e:
             print(f"❌ Error fetching articles: {e}")
             return None
 
     def like_article(self, slug):
-        """Like an article - i follow you follow me back"""
+        """Like an article"""
         if random.random() < 0.1:  # 10% chance to skip liking
             print("⏭️  Skipping like (random skip)")
             return False
@@ -69,8 +119,14 @@ class EcoXBot:
         payload = {"slug": slug}
 
         try:
-            time.sleep(random.uniform(0.5, 1.5))  # Reduced delay
-            response = requests.post(url, json=payload, headers=self.headers)
+            time.sleep(random.uniform(1, 2))
+            response = requests.post(
+                url, 
+                json=payload, 
+                headers=self.headers, 
+                timeout=10,
+                verify=False
+            )
             if response.status_code == 201:
                 print(f"✅ Liked article: {slug}")
                 return True
@@ -82,8 +138,7 @@ class EcoXBot:
             return False
 
     def comment_on_article(self, slug):
-        """Comment on an article - follow me i will follow"""
-        # Always comment (0% chance to skip)
+        """Comment on an article"""
         url = f"{self.base_url}/community/article-comment"
         comment = random.choice(self.comments)
         payload = {
@@ -92,8 +147,14 @@ class EcoXBot:
         }
 
         try:
-            time.sleep(random.uniform(1, 2))  # Reduced delay
-            response = requests.post(url, json=payload, headers=self.headers)
+            time.sleep(random.uniform(1.5, 2.5))
+            response = requests.post(
+                url, 
+                json=payload, 
+                headers=self.headers, 
+                timeout=10,
+                verify=False
+            )
             if response.status_code == 201:
                 print(f"💬 Commented on article: {comment}")
                 return True
@@ -105,7 +166,7 @@ class EcoXBot:
             return False
 
     def visit_user_profile(self, username):
-        """Visit user profile - i follow you follow me back"""
+        """Visit user profile"""
         if random.random() < 0.1:  # 10% chance to skip profile visit
             print("⏭️  Skipping profile visit (random skip)")
             return None
@@ -114,8 +175,14 @@ class EcoXBot:
         params = {"username": username}
 
         try:
-            time.sleep(random.uniform(0.5, 1))  # Reduced delay
-            response = requests.get(url, params=params, headers=self.headers)
+            time.sleep(random.uniform(1, 1.5))
+            response = requests.get(
+                url, 
+                params=params, 
+                headers=self.headers, 
+                timeout=10,
+                verify=False
+            )
             if response.status_code == 200:
                 user_data = response.json()
                 print(f"👤 Visited profile: {username} - {user_data['data']['name']}")
@@ -128,7 +195,7 @@ class EcoXBot:
             return None
 
     def follow_user(self, uid):
-        """Follow a user - follow me i will follow"""
+        """Follow a user"""
         if random.random() < 0.1:  # 10% chance to skip following
             print("⏭️  Skipping follow (random skip)")
             return False
@@ -137,21 +204,30 @@ class EcoXBot:
         payload = {"uid": uid}
 
         try:
-            time.sleep(random.uniform(0.5, 1))  # Reduced delay
-            response = requests.post(url, json=payload, headers=self.headers)
+            time.sleep(random.uniform(1, 1.5))
+            response = requests.post(
+                url, 
+                json=payload, 
+                headers=self.headers, 
+                timeout=10,
+                verify=False
+            )
             if response.status_code == 201:
                 print(f"🤝 Followed user: {uid}")
                 return True
             else:
                 print(f"❌ Failed to follow user {uid}: {response.status_code}")
+                print(f"❌ Response: {response.text}")
                 return False
         except Exception as e:
             print(f"❌ Error following user: {e}")
             return False
 
     def run_bot(self, duration_minutes=2):
-        """Run the bot for specified duration - i follow you follow me back"""
+        """Run the bot for specified duration"""
         print(f"🤖 Starting EcoX Bot for {duration_minutes} minutes...")
+        print(f"🌐 Environment: {'GitHub Actions' if 'GITHUB_ACTIONS' in os.environ else 'Local/Colab'}")
+        
         start_time = time.time()
         end_time = start_time + (duration_minutes * 60)
 
@@ -166,11 +242,11 @@ class EcoXBot:
         while time.time() < end_time:
             print(f"\n🔄 Cycle started at {datetime.now().strftime('%H:%M:%S')}")
 
-            # Fetch articles - follow me i will follow
+            # Fetch articles
             articles_data = self.get_community_articles()
             if not articles_data or 'data' not in articles_data:
                 print("❌ No articles found or error fetching articles")
-                time.sleep(0.5)  # Short delay before retry
+                time.sleep(random.uniform(2, 4))  # Longer delay on error
                 continue
 
             actions_performed['articles_fetched'] += 1
@@ -178,8 +254,8 @@ class EcoXBot:
 
             print(f"📰 Found {len(articles)} articles")
 
-            # Process each article with random selection - i follow you follow me back
-            processed_articles = random.sample(articles, min(3, len(articles)))  # Process random 3 articles
+            # Process each article with random selection
+            processed_articles = random.sample(articles, min(3, len(articles)))
 
             for article in processed_articles:
                 slug = article['slug']
@@ -187,37 +263,37 @@ class EcoXBot:
 
                 print(f"\n📝 Processing article: {slug[:10]}... by {username}")
 
-                # Like article (90% chance) - follow me i will follow
-                #if self.like_article(slug):
-                    #actions_performed['likes'] += 1
+                # Like article (90% chance)
+                if self.like_article(slug):
+                    actions_performed['likes'] += 1
 
-                # Comment on article (100% chance) - i follow you follow me back
-                #if self.comment_on_article(slug):
-                    #actions_performed['comments'] += 1
+                # Comment on article (100% chance)
+                if self.comment_on_article(slug):
+                    actions_performed['comments'] += 1
 
-                # Visit user profile (90% chance) - follow me i will follow
+                # Visit user profile (90% chance)
                 user_data = self.visit_user_profile(username)
                 if user_data:
                     actions_performed['profiles_visited'] += 1
 
-                    # Follow user (90% chance) - i follow you follow me back
+                    # Follow user (90% chance)
                     if self.follow_user(username):
                         actions_performed['follows'] += 1
 
-                # Reduced delay between article processing
-                time.sleep(random.uniform(0.3, 0.5))
+                # Delay between article processing
+                time.sleep(random.uniform(1, 2))
 
-            # Reduced delay between cycles
-            cycle_delay = random.uniform(0.5, 1.0)
+            # Delay between cycles
+            cycle_delay = random.uniform(3, 6)
             print(f"⏳ Waiting {cycle_delay:.1f} seconds before next cycle...")
             time.sleep(cycle_delay)
 
-            # Print progress - follow me i will follow
+            # Print progress
             elapsed = time.time() - start_time
             remaining = end_time - time.time()
             print(f"⏰ Elapsed: {elapsed:.0f}s, Remaining: {remaining:.0f}s")
 
-        # Print summary - i follow you follow me back
+        # Print summary
         print(f"\n🎯 Bot session completed!")
         print(f"📊 Summary:")
         print(f"   Articles fetched: {actions_performed['articles_fetched']}")
@@ -227,12 +303,11 @@ class EcoXBot:
         print(f"   Follows: {actions_performed['follows']}")
 
 def main():
-    # Get token from environment variable or hardcode (not recommended for production) - follow me i will follow
-    import os
+    # Get token from environment variable
     bearer_token = os.getenv('ECOX_BEARER_TOKEN')
 
     if not bearer_token:
-        # Fallback to hardcoded token (remove this in production) - i follow you follow me back
+        # Fallback to hardcoded token (for testing)
         bearer_token = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImRhaG1hZHUwNzFAZ21haWwuY29tIiwic3ViIjoxNzI5MTUsImlhdCI6MTc1NzYxMzgwNywiZXhwIjoxNzYwMjA1ODA3fQ.beemPqIyWocCE5PGh_zpRhSF2OIUHJ4avAuLQSdoq0fzIB-gypfBT_jaUgEps9vI10_HtbY3HqeLqpBCq-Zy7AL7MeP_5ERrBtlK8z_YMHc61Lh8XAXI3axdRWk3SvgPo4UYTBr6jhDgMHkCsipBiUxRAfnfO90PaMsSfk5VxVd_xvY5EWGtxY8_63u7Ws2r-anBoNoVSRHUboy6BIC_mZPMAxZirUcMglne8h1Zgsi6DvRw5P7tYAypEmSIKNZeBmF2DO-fBr-vGJ309RepAA_7H7SVepkwryUhMIBp1Ls6a0VelHXU9Ruga0DxtSyP7xM3ZHZsxXCUcVXiN7il3A"
         print("⚠️  Using hardcoded token - recommend using environment variable ECOX_BEARER_TOKEN")
 

@@ -15,8 +15,8 @@ from IPython.display import Image, display
 
 # Configure Chrome options for Colab
 options = webdriver.ChromeOptions()
-options.add_argument('--user-data-dir=/content/my_google_profile')
-options.add_argument('--profile-directory=Default')
+chrome_options.add_argument("--user-data-dir=/home/runner/.config/google-chrome")
+chrome_options.add_argument("--profile-directory=Default")
 options.add_argument('--headless')
 options.add_argument('--no-sandbox')
 options.add_argument('--disable-dev-shm-usage')

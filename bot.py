@@ -1,158 +1,192 @@
 import time
-time.sleep(2)
-
-# === STEP 4: Selenium Test with Your Profile ===
-print("\n🚀 Starting Selenium test with your profile...")
+import os
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.action_chains import ActionChains
-#from IPython.display import Image, display
+from selenium.common.exceptions import WebDriverException
 
-# Configure Chrome options for Colab
-options = webdriver.ChromeOptions()
-options.add_argument('--user-data-dir=/home/runner/.config/google-chrome')
-options.add_argument('--profile-directory=Default')
-options.add_argument('--headless')
-options.add_argument('--no-sandbox')
-options.add_argument('--disable-dev-shm-usage')
-options.add_argument('--disable-gpu')
-options.add_argument('--window-size=1920x1080')
-options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
+def main():
+    print("🚀 Starting Selenium test with your profile...")
+    
+    # Configure Chrome options for GitHub Actions
+    chrome_options = Options()
+    
+    # === CRITICAL: Use the injected profile path ===
+    chrome_options.add_argument('--user-data-dir=/home/runner/.config/google-chrome')
+    chrome_options.add_argument('--profile-directory=Default')
+    
+    # Required for GitHub Actions/Linux environment
+    chrome_options.add_argument('--headless=new')  # Use new headless mode
+    chrome_options.add_argument('--no-sandbox')
+    chrome_options.add_argument('--disable-dev-shm-usage')
+    chrome_options.add_argument('--disable-gpu')
+    chrome_options.add_argument('--window-size=1920x1080')
+    chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+    
+    # Disable extensions and other settings for stability
+    chrome_options.add_argument('--disable-extensions')
+    chrome_options.add_argument('--disable-dev-tools')
+    chrome_options.add_argument('--remote-debugging-port=0')
 
-# Initialize the driver
-driver = webdriver.Chrome(options=options)
+    # Initialize the driver
+    try:
+        driver = webdriver.Chrome(options=chrome_options)
+        print("✅ Chrome driver initialized successfully!")
+    except WebDriverException as e:
+        print(f"❌ Failed to initialize Chrome driver: {e}")
+        return
 
-def check_running_cells():
-    """Check if there are any running Colab cells"""
-    running_indicators = [
-        "//div[contains(@class, 'running')]",
-        "//div[contains(@class, 'spinner')]",
-        "//div[contains(@class, 'progress')]",
-        "//div[contains(@class, 'executing')]",
-        "//*[contains(text(), 'Executing')]",
-        "//*[contains(text(), 'Running')]"
-    ]
-    
-    for indicator in running_indicators:
-        try:
-            elements = driver.find_elements(By.XPATH, indicator)
-            if elements:
-                print(f"   ⚡ Found {len(elements)} running cell indicators with: {indicator}")
-                return True
-        except:
-            continue
-    return False
-
-def run_first_cell():
-    """Run the first available Colab cell"""
-    print("   ▶️  Attempting to run first cell...")
-    
-    # Try different selectors for Colab run buttons
-    run_button_selectors = [
-        "//button[contains(@class, 'run-button')]",
-        "//button[contains(@aria-label, 'Run')]",
-        "//div[contains(@class, 'run-cell')]",
-        "//span[contains(text(), 'Run')]/ancestor::button",
-        "//button[.//span[contains(text(), 'Run')]]"
-    ]
-    
-    for selector in run_button_selectors:
-        try:
-            run_buttons = driver.find_elements(By.XPATH, selector)
-            if run_buttons:
-                print(f"   ✅ Found {len(run_buttons)} run buttons with selector: {selector}")
-                # Click the first run button
-                run_buttons[0].click()
-                print("   🎯 Successfully clicked run button!")
-                return True
-        except Exception as e:
-            print(f"   ❌ Failed to click with selector {selector}: {str(e)}")
-            continue
-    
-    print("   ❌ Could not find a run button")
-    return False
-
-try:
-    print("✅ Chrome driver initialized successfully!")
-
-    # Visit the specified Google Colab URL
-    print("\n🌐 Visiting Google Colab URL...")
-    colab_url = "https://colab.research.google.com/drive/1MElDzVC3JbJ8zLmf5AMQp54mi_u3Uu7r"
-    driver.get(colab_url)
-    
-    # Wait for page to load
-    print("⏳ Waiting for page to load...")
-    time.sleep(10)
-
-    # Check if there are any running Colab cells
-    print("🔍 Checking for running Colab cells...")
-    
-    cell_running = check_running_cells()
-    
-    if cell_running:
-        print("   ⏳ Cells are running - waiting for completion...")
-        # Wait additional time for cells to complete
-        time.sleep(15)
+    def check_running_cells():
+        """Check if there are any running Colab cells"""
+        running_indicators = [
+            "//div[contains(@class, 'running')]",
+            "//div[contains(@class, 'spinner')]",
+            "//div[contains(@class, 'progress')]",
+            "//div[contains(@class, 'executing')]",
+            "//*[contains(text(), 'Executing')]",
+            "//*[contains(text(), 'Running')]",
+            "//circle[@id='filledCircle']",
+            "//*[contains(@class, 'notebook-executing')]"
+        ]
         
-        # Check again if cells are still running
-        if check_running_cells():
-            print("   ⚠️  Cells still running after wait, proceeding anyway...")
-        else:
-            print("   ✅ All cells completed execution")
-    else:
-        print("   ✅ No running cells detected - attempting to run first cell")
-        # Try to run the first cell
-        if run_first_cell():
-            print("   ⏳ Waiting for cell to start running...")
-            time.sleep(5)
+        for indicator in running_indicators:
+            try:
+                elements = driver.find_elements(By.XPATH, indicator)
+                if elements:
+                    print(f"   ⚡ Found {len(elements)} running cell indicators with: {indicator}")
+                    return True
+            except:
+                continue
+        return False
+
+    def run_focused_cell():
+        """Run the currently focused cell using Ctrl+Enter"""
+        print("   ⌨️  Sending Ctrl+Enter to run focused cell...")
+        
+        try:
+            # Get the currently focused element
+            focused_element = driver.switch_to.active_element
+            print(f"   🔍 Focused element: {focused_element.tag_name}")
             
-            # Check if cell started running
+            # Send Ctrl+Enter to the focused element
+            focused_element.send_keys(Keys.CONTROL + Keys.ENTER)
+            print("   ✅ Ctrl+Enter sent successfully!")
+            return True
+            
+        except Exception as e:
+            print(f"   ❌ Failed to send Ctrl+Enter: {str(e)}")
+            
+            # Fallback: try sending to body as last resort
+            try:
+                print("   🔧 Trying fallback: sending Ctrl+Enter to body...")
+                body = driver.find_element(By.TAG_NAME, 'body')
+                body.send_keys(Keys.CONTROL + Keys.ENTER)
+                print("   ✅ Fallback Ctrl+Enter sent!")
+                return True
+            except Exception as fallback_error:
+                print(f"   ❌ Fallback also failed: {str(fallback_error)}")
+                return False
+
+    def focus_first_cell():
+        """Try to focus on the first code cell"""
+        print("   🔍 Attempting to focus on first code cell...")
+        
+        cell_selectors = [
+            "//div[contains(@class, 'code-cell')]",
+            "//div[contains(@class, 'cell')]",
+            "//div[contains(@class, 'input')]",
+            "//div[@role='textbox']",
+            "//div[contains(@class, 'monaco-editor')]"
+        ]
+        
+        for selector in cell_selectors:
+            try:
+                cells = driver.find_elements(By.XPATH, selector)
+                if cells:
+                    print(f"   ✅ Found {len(cells)} potential code cells with: {selector}")
+                    # Click on the first cell to focus it
+                    cells[0].click()
+                    print("   🎯 First code cell focused!")
+                    return True
+            except Exception as e:
+                print(f"   ❌ Could not focus with {selector}: {str(e)}")
+                continue
+        
+        print("   ⚠️  Could not find a code cell to focus")
+        return False
+
+    try:
+        # Visit the specified Google Colab URL
+        print("\n🌐 Visiting Google Colab URL...")
+        colab_url = "https://colab.research.google.com/drive/1MElDzVC3JbJ8zLmf5AMQp54mi_u3Uu7r"
+        driver.get(colab_url)
+        
+        # Wait for page to load
+        print("⏳ Waiting for page to load...")
+        time.sleep(15)
+
+        # Check if there are any running Colab cells
+        print("🔍 Checking for running Colab cells...")
+        
+        cell_running = check_running_cells()
+        cell_started = False
+        
+        if cell_running:
+            print("   ⏳ Cells are running - waiting for completion...")
+            time.sleep(20)
+            
             if check_running_cells():
-                print("   ✅ Cell started running successfully!")
-                print("   ⏳ Waiting for cell execution to complete...")
-                time.sleep(15)
+                print("   ⚠️  Cells still running after wait, proceeding anyway...")
             else:
-                print("   ⚠️  Cell may not have started running")
+                print("   ✅ All cells completed execution")
         else:
-            print("   ⚠️  Could not run cell, proceeding with screenshot")
+            print("   ✅ No running cells detected - attempting to run first cell")
+            
+            if focus_first_cell():
+                time.sleep(2)
+            
+            cell_started = run_focused_cell()
+            
+            if cell_started:
+                print("   ⏳ Waiting for cell to start running...")
+                time.sleep(5)
+                
+                if check_running_cells():
+                    print("   ✅ Cell started running successfully!")
+                    time.sleep(25)
+                else:
+                    print("   ⚠️  Cell may not have started running")
 
-    # Scroll to capture more content
-    print("🖱️  Scrolling to capture notebook content...")
-    driver.execute_script("window.scrollBy(0, 800);")
-    time.sleep(2)
+        # Scroll and take screenshot
+        print("🖱️  Scrolling to capture notebook content...")
+        driver.execute_script("window.scrollBy(0, 800);")
+        time.sleep(2)
 
-    # Take screenshot
-    screenshot_filename = 'colab_screenshot.png'
-    driver.save_screenshot(screenshot_filename)
-    print(f"   📸 Screenshot saved: {screenshot_filename}")
+        # Take screenshot
+        screenshot_filename = 'colab_screenshot.png'
+        driver.save_screenshot(screenshot_filename)
+        print(f"   📸 Screenshot saved: {screenshot_filename}")
 
-    # Display results
-    print("\n" + "="*60)
-    print("🎯 SCREENSHOT COMPLETE")
-    print("="*60)
-    print(f"📋 URL visited: {colab_url}")
-    print(f"🔍 Running cells detected initially: {'Yes' if cell_running else 'No'}")
-    print(f"🎬 Attempted to run cell: {'Yes' if not cell_running else 'No'}")
-    print("⏱️  Total execution time: ~40 seconds")
-    print("="*60)
+        # Display results
+        print("\n" + "="*60)
+        print("🎯 SCREENSHOT COMPLETE")
+        print("="*60)
+        print(f"📋 URL visited: {colab_url}")
+        print(f"🔍 Running cells detected initially: {'Yes' if cell_running else 'No'}")
+        print(f"🎬 Attempted to run cell: {'Yes' if not cell_running else 'No'}")
+        print(f"🚀 Cell started successfully: {'Yes' if not cell_running and cell_started else 'No'}")
+        print("="*60)
 
-    # Display screenshot
-    #print("\n🖼️ Google Colab Screenshot:")
-    #try:
-        #display(Image(filename=screenshot_filename, width=800))
-   # except FileNotFoundError:
-        #print("   ❌ Screenshot not found")
+    except Exception as e:
+        print(f"❌ Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
-except Exception as e:
-    print(f"❌ Error: {str(e)}")
-    import traceback
-    traceback.print_exc()
+    finally:
+        # Always quit the driver in GitHub Actions
+        driver.quit()
+        print("\n✅ Browser closed. Test completed.")
 
-finally:
-    print("\n🔍 Test completed. Browser remains open for inspection.")
-    print("💡 Run 'driver.quit()' when finished.")
+if __name__ == "__main__":
+    main()

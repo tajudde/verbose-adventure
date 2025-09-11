@@ -11,7 +11,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
-from IPython.display import Image, display
+#from IPython.display import Image, display
 
 # Configure Chrome options for Colab
 options = webdriver.ChromeOptions()
@@ -142,11 +142,11 @@ try:
     print("="*60)
 
     # Display screenshot
-    print("\n🖼️ Google Colab Screenshot:")
-    try:
-        display(Image(filename=screenshot_filename, width=800))
-    except FileNotFoundError:
-        print("   ❌ Screenshot not found")
+    #print("\n🖼️ Google Colab Screenshot:")
+    #try:
+        #display(Image(filename=screenshot_filename, width=800))
+   # except FileNotFoundError:
+        #print("   ❌ Screenshot not found")
 
 except Exception as e:
     print(f"❌ Error: {str(e)}")

@@ -8,6 +8,56 @@ from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
+
+
+
+
+
+
+
+import os
+import sys
+import subprocess
+import time
+
+def kill_chrome_processes():
+    """Terminate all Chrome processes to ensure clean state"""
+    try:
+        # For Linux/Unix systems (including GitHub Actions)
+        if sys.platform in ['linux', 'linux2']:
+            # Try graceful termination first
+            result = subprocess.run(['pkill', '-f', 'chrome'], 
+                                  capture_output=True, text=True)
+            
+            # If no processes were found, pkill returns non-zero exit code
+            if result.returncode != 0:
+                print("No Chrome processes found or unable to terminate")
+            else:
+                print("Chrome processes terminated successfully")
+                
+            # Force kill if any remain after a brief wait
+            time.sleep(1)
+            subprocess.run(['pkill', '-9', '-f', 'chrome'], 
+                         capture_output=True)
+            
+        # For Windows systems
+        elif sys.platform == 'win32':
+            subprocess.run(['taskkill', '/f', '/im', 'chrome.exe'], 
+                         capture_output=True)
+            
+        # For macOS
+        elif sys.platform == 'darwin':
+            subprocess.run(['pkill', '-f', 'Google Chrome'], 
+                         capture_output=True)
+            subprocess.run(['pkill', '-9', '-f', 'Google Chrome'], 
+                         capture_output=True)
+
+
+
+
+
+
+
 def main():
     print("🚀 Starting Selenium test with your profile...")
     

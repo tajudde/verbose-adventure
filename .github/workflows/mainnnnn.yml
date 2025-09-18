@@ -1,4 +1,4 @@
-name: Trigger 1000 Workflow Runs
+name: Trigger 1000 Workflow Runs with GH CLI
 on:
   workflow_dispatch:
     inputs:
@@ -15,54 +15,42 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.x'
-
-    - name: Install dependencies
-      run: pip install requests
-
-    - name: Trigger 1000 workflow runs
-      env:
-        PAT: ${{ secrets.GH_PAT }}
+    - name: Install GitHub CLI
       run: |
-        import os
-        import requests
-        import time
+        type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+        && sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+        && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+        && sudo apt update \
+        && sudo apt install gh -y
 
-        total_runs = ${{ inputs.total_runs }}
-        repo = os.environ['GITHUB_REPOSITORY']
-        token = os.environ['PAT']
-        workflow_file = 'main.yml'  # Change this to your workflow filename
+    - name: Authenticate with GitHub CLI using PAT
+      run: |
+        echo "${{ secrets.PAT }}" | gh auth login --with-token
+        gh auth status
 
-        headers = {
-            'Authorization': f'token {token}',
-            'Accept': 'application/vnd.github.v3+json',
-            'X-GitHub-Api-Version': '2022-11-28'
-        }
+    - name: Trigger workflow runs
+      run: |
+        total_runs=${{ inputs.total_runs }}
+        workflow_file="main.yml"  # Change to your workflow filename
+        
+        for i in $(seq 1 $total_runs); do
+          echo "🚀 Triggering workflow run $i/$total_runs"
+          
+          # Trigger the workflow
+          gh workflow run $workflow_file --ref main
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ Successfully triggered run $i"
+          else
+            echo "❌ Failed to trigger run $i"
+          fi
+          
+          # Add delay to avoid rate limiting
+          sleep 2
+        done
 
-        url = f'https://api.github.com/repos/{repo}/actions/workflows/{workflow_file}/dispatches'
-
-        for i in range(1, total_runs + 1):
-            data = {
-                'ref': 'main'  # Change to your branch name if different
-            }
-            
-            try:
-                response = requests.post(url, headers=headers, json=data)
-                
-                if response.status_code == 204:
-                    print(f'✅ Successfully triggered workflow run {i}/{total_runs}')
-                else:
-                    print(f'❌ Failed to trigger workflow {i}: {response.status_code} {response.text}')
-                    # Continue trying despite errors
-                    
-            except Exception as e:
-                print(f'❌ Error triggering workflow {i}: {str(e)}')
-            
-            # Add delay to avoid rate limiting (adjust as needed)
-            time.sleep(2)  # 2 seconds between triggers
-
-        print(f'🎉 Attempted to trigger {total_runs} workflow runs!')
-      shell: python
+    - name: Completion message
+      run: |
+        echo "🎉 Started triggering ${{ inputs.total_runs }} individual workflow runs!"
+        echo "They will appear as separate runs in your Actions tab."

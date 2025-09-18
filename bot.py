@@ -1,219 +1,280 @@
+import requests
+import json
 import time
-import os
-import shutil
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.common.exceptions import WebDriverException
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+import random
+import string
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime
 
-def main():
-    print("🚀 Starting Selenium test with your profile...")
+class PopMartVip:
+    def __init__(self):
+        self.base_url = "https://www.popmartvip.cc"
+        self.session = requests.Session()
+        self.headers = {
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Accept-Encoding": "gzip, deflate, br, zstd",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Connection": "keep-alive",
+            "Host": "www.popmartvip.cc",
+            "Origin": self.base_url,
+            "Sec-Ch-Ua": '"Chromium";v="130", "Opera";v="116", "Not?A_Brand";v="99"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Windows"',
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-origin",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 OPR/116.0.0.0 (Edition developer)",
+            "X-Requested-With": "XMLHttpRequest"
+        }
+        self.session.headers.update(self.headers)
+        
+    def generate_random_email(self):
+        """Generate a random email ending with @yopmail.com"""
+        username_length = random.randint(8, 15)
+        username = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(username_length))
+        return f"{username}@yopmail.com"
     
-    # === FIX: Clean up any existing Chrome processes and lock files ===
-    print("🧹 Cleaning up any existing Chrome processes...")
-    os.system('pkill -f chrome || true')  # Kill any Chrome processes
-    os.system('pkill -f chromedriver || true')  # Kill any ChromeDriver processes
+    def generate_random_password(self):
+        """Generate a random password with uppercase, lowercase, digits and special characters"""
+        length = random.randint(10, 14)
+        uppercase = random.choice(string.ascii_uppercase)
+        lowercase = random.choice(string.ascii_lowercase)
+        digit = random.choice(string.digits)
+        special = random.choice('!@#$%^&*()_+-=')
+        
+        # Generate the remaining characters
+        remaining = ''.join(random.choice(string.ascii_letters + string.digits + '!@#$%^&*()_+-=') 
+                           for _ in range(length - 4))
+        
+        # Combine and shuffle
+        password = uppercase + lowercase + digit + special + remaining
+        password_list = list(password)
+        random.shuffle(password_list)
+        return ''.join(password_list)
     
-    # Define the profile path
-    profile_path = '/home/runner/.config/google-chrome'
-    
-    # Remove Chrome lock files if they exist
-    lock_files = [
-        os.path.join(profile_path, 'Default', 'SingletonLock'),
-        os.path.join(profile_path, 'SingletonLock'),
-        os.path.join(profile_path, 'SingletonCookie'),
-        os.path.join(profile_path, 'Default', 'SingletonCookie')
-    ]
-    
-    for lock_file in lock_files:
-        if os.path.exists(lock_file):
-            try:
-                os.remove(lock_file)
-                print(f"✅ Removed lock file: {lock_file}")
-            except Exception as e:
-                print(f"⚠️  Could not remove {lock_file}: {e}")
-    
-    # Configure Chrome options for GitHub Actions
-    chrome_options = Options()
-    
-    # === CRITICAL: Use the injected profile path ===
-    chrome_options.add_argument(f'--user-data-dir={profile_path}')
-    chrome_options.add_argument('--profile-directory=Default')
-    
-    # === FIX: Add unique user data directory per run ===
-    import uuid
-    unique_id = uuid.uuid4().hex[:8]
-    unique_profile_dir = f'{profile_path}_{unique_id}'
-    
-    # Copy profile to unique directory to avoid conflicts
-    if os.path.exists(profile_path):
+    def get_csrf_token(self):
+        """Get CSRF token from the registration page"""
         try:
-            shutil.copytree(profile_path, unique_profile_dir)
-            print(f"✅ Copied profile to unique directory: {unique_profile_dir}")
-            chrome_options.add_argument(f'--user-data-dir={unique_profile_dir}')
+            response = self.session.get(f"{self.base_url}/login/register")
+            # You might need to parse the HTML to extract the CSRF token
+            # This is a placeholder - you'll need to adjust based on the actual page structure
+            return "AHjHtMzp9Wfx6YgRxmSXZe5nhXKEDXfSADhKZU6U"
         except Exception as e:
-            print(f"⚠️  Could not copy profile, using original: {e}")
-            chrome_options.add_argument(f'--user-data-dir={profile_path}')
+            print(f"Error getting CSRF token: {e}")
+            return None
     
-    # Chrome configuration
-    chrome_options.add_argument('--headless=new')
-    chrome_options.add_argument('--no-sandbox')
-    chrome_options.add_argument('--disable-dev-shm-usage')
-    chrome_options.add_argument('--disable-gpu')
-    chrome_options.add_argument('--window-size=1920,1080')
-    chrome_options.add_argument('--disable-extensions')
-    chrome_options.add_argument('--remote-debugging-port=0')
-    chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-    
-    # Additional stability arguments
-    chrome_options.add_argument('--no-first-run')
-    chrome_options.add_argument('--disable-setuid-sandbox')
-    chrome_options.add_argument('--disable-web-security')
-    chrome_options.add_argument('--disable-notifications')
-
-    # Initialize the driver
-    try:
-        print("🛠️  Setting up ChromeDriver...")
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        print("✅ Chrome driver initialized successfully!")
+    def register(self, email, password, invite_code, verification_code):
+        """Register a new account"""
+        url = f"{self.base_url}/login/register"
         
-    except WebDriverException as e:
-        print(f"❌ Failed to initialize Chrome driver: {e}")
-        print("🔄 Trying alternative method without service...")
-        try:
-            driver = webdriver.Chrome(options=chrome_options)
-            print("✅ Chrome driver initialized with fallback method!")
-        except Exception as fallback_error:
-            print(f"❌ Fallback also failed: {fallback_error}")
-            return
-
-    def check_running_cells():
-        """Check if there are any running Colab cells"""
-        running_indicators = [
-            "//div[contains(@class, 'running')]",
-            "//div[contains(@class, 'spinner')]",
-            "//div[contains(@class, 'progress')]",
-            "//div[contains(@class, 'executing')]",
-            "//*[contains(text(), 'Executing')]",
-            "//*[contains(text(), 'Running')]",
-        ]
+        # Get CSRF token
+        csrf_token = self.get_csrf_token()
+        if not csrf_token:
+            print("Failed to get CSRF token")
+            return False, "CSRF token failure"
         
-        for indicator in running_indicators:
-            try:
-                elements = driver.find_elements(By.XPATH, indicator)
-                if elements:
-                    print(f"   ⚡ Found {len(elements)} running cell indicators")
-                    return True
-            except:
-                continue
-        return False
-
-    def run_focused_cell():
-        """Run the currently focused cell using Ctrl+Enter"""
-        print("   ⌨️  Sending Ctrl+Enter to run focused cell...")
+        # Payload data
+        payload = {
+            "mobile": email,
+            "password": password,
+            "inviteCode": invite_code,
+            "code": verification_code,
+            "_token": csrf_token
+        }
+        
+        # Update headers for this request
+        headers = self.headers.copy()
+        headers.update({
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Referer": f"{self.base_url}/login/register"
+        })
         
         try:
-            body = driver.find_element(By.TAG_NAME, 'body')
-            body.send_keys(Keys.CONTROL + Keys.ENTER)
-            print("   ✅ Ctrl+Enter sent successfully!")
+            response = self.session.post(url, data=payload, headers=headers)
+            result = response.json()
+            print(f"Registration Response: {result}")
+            
+            if result.get("code") == 200:
+                print("Registration successful!")
+                return True, "Registration successful"
+            else:
+                error_msg = result.get('msg', 'Unknown error')
+                print(f"Registration failed: {error_msg}")
+                return False, error_msg
+                
+        except Exception as e:
+            error_msg = f"Error during registration: {e}"
+            print(error_msg)
+            return False, error_msg
+    
+    def get_investment_csrf_token(self):
+        """Get CSRF token for investment page"""
+        try:
+            response = self.session.get(f"{self.base_url}/")
+            # You might need to parse the HTML to extract the CSRF token
+            # This is a placeholder - you'll need to adjust based on the actual page structure
+            return "sbsWEbzeMojxxdsYYgwWAghESS4F4SlHMDHDv2Zg"
+        except Exception as e:
+            print(f"Error getting investment CSRF token: {e}")
+            return None
+    
+    def invest(self, device_id):
+        """Make an investment (purchase)"""
+        url = f"{self.base_url}/device/invest"
+        
+        # Get CSRF token
+        csrf_token = self.get_investment_csrf_token()
+        if not csrf_token:
+            print("Failed to get investment CSRF token")
+            return False, "CSRF token failure"
+        
+        # Payload data
+        payload = {
+            "id": device_id,
+            "_token": csrf_token
+        }
+        
+        # Update headers for this request
+        headers = self.headers.copy()
+        headers.update({
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Referer": f"{self.base_url}/"
+        })
+        
+        try:
+            response = self.session.post(url, data=payload, headers=headers)
+            result = response.json()
+            print(f"Investment Response: {result}")
+            
+            if result.get("code") == 200:
+                print("Investment successful!")
+                return True, "Investment successful"
+            else:
+                error_msg = result.get('msg', 'Unknown error')
+                print(f"Investment failed: {error_msg}")
+                return False, error_msg
+                
+        except Exception as e:
+            error_msg = f"Error during investment: {e}"
+            print(error_msg)
+            return False, error_msg
+
+class EmailSender:
+    def __init__(self, sender_email, sender_password, recipients):
+        self.sender_email = sender_email
+        self.sender_password = sender_password
+        self.recipients = recipients if isinstance(recipients, list) else [recipients]
+    
+    def send_success_email(self, success_accounts):
+        """Send email with successful account details"""
+        if not success_accounts:
+            print("No successful accounts to report")
+            return False
+        
+        try:
+            # Create message
+            msg = MIMEMultipart()
+            msg['From'] = self.sender_email
+            msg['To'] = ", ".join(self.recipients)
+            msg['Subject'] = f"PopMart VIP Success Report - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+            
+            # Create email body
+            body = "Successful PopMart VIP Accounts:\n\n"
+            for i, account in enumerate(success_accounts, 1):
+                body += f"Account {i}:\n"
+                body += f"Email: {account['email']}\n"
+                body += f"Password: {account['password']}\n"
+                body += f"Registration Status: {account['registration_status']}\n"
+                body += f"Investment Status: {account['investment_status']}\n"
+                body += f"Timestamp: {account['timestamp']}\n"
+                body += "-" * 50 + "\n\n"
+            
+            msg.attach(MIMEText(body, 'plain'))
+            
+            # Send email
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+                server.login(self.sender_email, self.sender_password)
+                server.sendmail(self.sender_email, self.recipients, msg.as_string())
+            
+            print("Success email sent successfully!")
             return True
             
         except Exception as e:
-            print(f"   ❌ Failed to send Ctrl+Enter: {str(e)}")
+            print(f"Error sending email: {e}")
             return False
 
-    def focus_first_cell():
-        """Try to focus on the first code cell"""
-        print("   🔍 Attempting to focus on first code cell...")
+def main():
+    # Email configuration
+    sender_email = "tajuddeenahmad090@gmail.com"
+    sender_password = "jnsh ovzf tdwe jwhc"  # App password for Gmail
+    recipients = ["teejeedeeone@gmail.com"]
+    
+    # Initialize email sender
+    email_sender = EmailSender(sender_email, sender_password, recipients)
+    
+    # Track successful accounts
+    successful_accounts = []
+    
+    # Number of accounts to create
+    num_accounts = 1  # You can adjust this number
+    
+    for i in range(num_accounts):
+        print(f"\n=== Creating Account {i+1}/{num_accounts} ===")
         
-        cell_selectors = [
-            "//div[contains(@class, 'code-cell')]",
-            "//div[contains(@class, 'cell')]",
-            "//div[contains(@class, 'input')]",
-            "//div[@role='textbox']",
-        ]
+        # Initialize a new session for each account
+        popmart = PopMartVip()
         
-        for selector in cell_selectors:
-            try:
-                cells = driver.find_elements(By.XPATH, selector)
-                if cells:
-                    print(f"   ✅ Found {len(cells)} potential code cells")
-                    cells[0].click()
-                    print("   🎯 First code cell focused!")
-                    return True
-            except Exception as e:
-                continue
+        # Generate random credentials
+        email = popmart.generate_random_email()
+        password = popmart.generate_random_password()
+        invite_code = "73fa75d1"
+        verification_code = "000000"  # Placeholder - would need real verification in production
+        device_id = 3
         
-        print("   ⚠️  Could not find a code cell to focus")
-        return False
-
-    try:
-        # Visit the specified Google Colab URL
-        print("\n🌐 Visiting Google Colab URL...")
-        colab_url = "https://colab.research.google.com/drive/1MElDzVC3JbJ8zLmf5AMQp54mi_u3Uu7r"
-        driver.get(colab_url)
+        print(f"Generated Email: {email}")
+        print(f"Generated Password: {password}")
         
-        # Wait for page to load
-        print("⏳ Waiting for page to load...")
-        time.sleep(10)
-
-        # Check if we're on the right page
-        print(f"📄 Current URL: {driver.current_url}")
-        print(f"📄 Page title: {driver.title}")
-
-        # Check if there are any running Colab cells
-        print("🔍 Checking for running Colab cells...")
+        # Step 1: Register
+        print("Attempting registration...")
+        registration_success, registration_msg = popmart.register(email, password, invite_code, verification_code)
         
-        cell_running = check_running_cells()
-        cell_started = False
+        account_info = {
+            'email': email,
+            'password': password,
+            'registration_status': registration_msg,
+            'investment_status': 'Not attempted',
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
         
-        if cell_running:
-            print("   ⏳ Cells are running - waiting for completion...")
-            time.sleep(15)
+        if registration_success:
+            # Add a small delay between registration and investment
+            time.sleep(2)
+            
+            # Step 2: Make investment
+            print("Attempting investment...")
+            investment_success, investment_msg = popmart.invest(device_id)
+            
+            account_info['investment_status'] = investment_msg
+            
+            if investment_success:
+                print("Account creation and investment completed successfully!")
+                successful_accounts.append(account_info)
+            else:
+                print("Registration succeeded but investment failed.")
         else:
-            print("   ✅ No running cells detected - attempting to run first cell")
-            
-            if focus_first_cell():
-                time.sleep(2)
-            
-            cell_started = run_focused_cell()
-            
-            if cell_started:
-                print("   ⏳ Waiting for cell to start running...")
-                time.sleep(10)
-
-        # Take screenshot
-        screenshot_filename = 'colab_screenshot.png'
-        driver.save_screenshot(screenshot_filename)
-        print(f"   📸 Screenshot saved: {screenshot_filename}")
-
-        print("\n🎯 SCREENSHOT COMPLETE")
-        print(f"📋 URL visited: {colab_url}")
-
-    except Exception as e:
-        print(f"❌ Error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-
-    finally:
-        # Always quit the driver
-        try:
-            driver.quit()
-            print("\n✅ Browser closed. Test completed.")
-        except:
-            print("\n⚠️  Browser already closed or failed to quit.")
+            print("Registration failed. Investment not attempted.")
         
-        # Clean up temporary profile directory
-        if 'unique_profile_dir' in locals() and os.path.exists(unique_profile_dir):
-            try:
-                shutil.rmtree(unique_profile_dir)
-                print(f"✅ Cleaned up temporary profile: {unique_profile_dir}")
-            except:
-                print("⚠️  Could not clean up temporary profile")
+        # Add delay between account creation attempts to avoid rate limiting
+        time.sleep(3)
+    
+    # Send email with successful accounts
+    if successful_accounts:
+        print(f"\nSending report for {len(successful_accounts)} successful accounts...")
+        email_sender.send_success_email(successful_accounts)
+    else:
+        print("\nNo successful accounts to report.")
 
 if __name__ == "__main__":
     main()

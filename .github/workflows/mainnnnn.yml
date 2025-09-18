@@ -1,33 +1,42 @@
-name: Run Bot (Self-triggering)
-
+name: Run Bot 1000 Times
 on:
   workflow_dispatch:
+    inputs:
+      run_count:
+        description: 'Number of times to run bot.py'
+        required: true
+        default: '1000'
+        type: string
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+    - name: Install dependencies (if needed)
+      run: |
+        python -m pip install --upgrade pip
+        # Add any dependencies your bot.py requires
+        # pip install -r requirements.txt
 
-      - name: Run bot
-        run: python bot.py
-
-      - name: Delay before next run
-        run: sleep 1  # 5 minutes
-
-      - name: Trigger Next Run
-        run: |
-          curl -X POST -H "Accept: application/vnd.github+json" \
-          -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
-          "https://api.github.com/repos/${{ github.repository }}/actions/workflows/main.yml/dispatches" \
-          -d '{"ref":"main"}'
+    - name: Run bot.py multiple times
+      run: |
+        count=${{ inputs.run_count }}
+        echo "Running bot.py $count times"
+        
+        for i in $(seq 1 $count); do
+          echo "Run $i/$count"
+          python bot.py
+          echo "Completed run $i"
+          echo "-------------------"
+        done
+        
+        echo "All $count runs completed successfully!"

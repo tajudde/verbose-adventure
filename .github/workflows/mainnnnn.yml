@@ -1,56 +1,38 @@
-name: Trigger 1000 Workflow Runs with GH CLI
+
+name: Run Bot (Self-triggering)
+
 on:
-  workflow_dispatch:
-    inputs:
-      total_runs:
-        description: 'Number of workflow runs to trigger'
-        required: true
-        default: '1000'
-        type: number
+  workflow_dispatch: # Allows manual start
 
 jobs:
-  trigger-workflows:
+  run-bot:
     runs-on: ubuntu-latest
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Install GitHub CLI
-      run: |
-        type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)
-        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
-        && sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
-        && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-        && sudo apt update \
-        && sudo apt install gh -y
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
 
-    - name: Authenticate with GitHub CLI using PAT
-      run: |
-        echo "${{ secrets.GH_PAT }}" | gh auth login --with-token
-        gh auth status
+      - name: Install dependencies
+        run: pip install -r requirements.txt
 
-    - name: Trigger workflow runs
-      run: |
-        total_runs=${{ inputs.total_runs }}
-        workflow_file="main.yml"  # Change to your workflow filename
-        
-        for i in $(seq 1 $total_runs); do
-          echo "🚀 Triggering workflow run $i/$total_runs"
+      - name: Run bot
+        run: python bot.py
+
+      # Add delay before next trigger (5 minutes = 300 seconds)
+      - name: Delay before next run
+        run: sleep 0
+
+      # Self-trigger next run
+      - name: Trigger Next Run
+        run: |
+          curl -X POST -H "Accept: application/vnd.github+json" \
+          -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+          "https://api.github.com/repos/${{ github.repository }}/actions/workflows/main.yml/dispatches" \
+          -d '{"ref":"main"}'
           
-          # Trigger the workflow
-          gh workflow run $workflow_file --ref main
-          
-          if [ $? -eq 0 ]; then
-            echo "✅ Successfully triggered run $i"
-          else
-            echo "❌ Failed to trigger run $i"
-          fi
-          
-          # Add delay to avoid rate limiting
-          sleep 2
-        done
 
-    - name: Completion message
-      run: |
-        echo "🎉 Started triggering ${{ inputs.total_runs }} individual workflow runs!"
-        echo "They will appear as separate runs in your Actions tab."

@@ -26,18 +26,21 @@ jobs:
         python -m pip install --upgrade pip
         pip install requests
         # Add any other dependencies your bot.py requires
-        # For example: pip install beautifulsoup4 selenium numpy pandas etc.
 
     - name: Run bot.py multiple times
       run: |
         count=${{ inputs.run_count }}
-        echo "Running bot.py $count times"
+        echo "Starting $count runs of bot.py"
+        echo "=========================================="
         
         for i in $(seq 1 $count); do
-          echo "Run $i/$count"
+          echo "🚀 WORKFLOW RUN $i/$count"
+          echo "================================"
           python bot.py
-          echo "Completed run $i"
-          echo "-------------------"
+          echo "✅ COMPLETED RUN $i"
+          echo "--------------------------------"
+          sleep 1  # Small delay between runs for better readability
         done
         
-        echo "All $count runs completed successfully!"
+        echo "🎉 ALL $count RUNS COMPLETED SUCCESSFULLY!"
+        echo "=========================================="

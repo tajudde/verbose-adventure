@@ -21,11 +21,12 @@ jobs:
       with:
         python-version: '3.x'
 
-    - name: Install dependencies (if needed)
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        # Add any dependencies your bot.py requires
-        # pip install -r requirements.txt
+        pip install requests
+        # Add any other dependencies your bot.py requires
+        # For example: pip install beautifulsoup4 selenium numpy pandas etc.
 
     - name: Run bot.py multiple times
       run: |

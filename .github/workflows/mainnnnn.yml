@@ -26,7 +26,7 @@ jobs:
 
     - name: Authenticate with GitHub CLI using PAT
       run: |
-        echo "${{ secrets.PAT }}" | gh auth login --with-token
+        echo "${{ secrets.GH_PAT }}" | gh auth login --with-token
         gh auth status
 
     - name: Trigger workflow runs
